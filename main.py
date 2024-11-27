@@ -10,10 +10,8 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize
 from collections import deque
 import pandas as pd
 
+
 def read_txt_files(folder_path):
-    """
-    Lee todos los archivos .txt de una carpeta y devuelve una lista de matrices con sus nombres de archivo.
-    """
     matrices, filenames = [], []
     for filename in os.listdir(folder_path):
         if filename.endswith('.txt'):
@@ -29,28 +27,20 @@ def read_txt_files(folder_path):
                 print(f"Error al leer {filename}: {e}")
     return matrices, filenames
 
+
 def contar_subdivisiones(matriz):
-    """
-    Cuenta el número de subdivisiones distintas (regiones conexas) en la matriz,
-    considerando que las subdivisiones están formadas por valores iguales y son
-    ortogonalmente conexas.
-    """
     labeled_array, num_features = measure.label(matriz, connectivity=1, return_num=True)
     return num_features
 
+
 def inicializar_solucion_espectral(grid, n_clusters):
-    """
-    Inicializa la solución utilizando agrupamiento espectral basado en los valores de las celdas.
-    """
     reshaped_grid = grid.flatten().reshape(-1, 1)
     spectral = SpectralClustering(n_clusters=n_clusters, affinity='nearest_neighbors', random_state=42)
     labels = spectral.fit_predict(reshaped_grid)
     return labels.reshape(grid.shape)
 
+
 def calcular_costo(solucion, grid, alpha, penalizacion_subdivisiones=0.1):
-    """
-    Calcula el costo de una solución basado en el número de subregiones y su homogeneidad.
-    """
     regiones = np.unique(solucion)
     total_variance = np.var(grid)
     total_size = grid.size
@@ -68,10 +58,25 @@ def calcular_costo(solucion, grid, alpha, penalizacion_subdivisiones=0.1):
     costo += penalizacion_subdivisiones * subdivisiones
     return costo
 
+
+def ajustar_casillas_aisladas(solucion):
+    filas, columnas = solucion.shape
+    nueva_solucion = solucion.copy()
+    direcciones = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+    for f in range(filas):
+        for c in range(columnas):
+            colores_vecinos = []
+            for df, dc in direcciones:
+                nf, nc = f + df, c + dc
+                if 0 <= nf < filas and 0 <= nc < columnas:
+                    colores_vecinos.append(solucion[nf, nc])
+            if colores_vecinos.count(colores_vecinos[0]) == 4:
+                nueva_solucion[f, c] = colores_vecinos[0]
+    return nueva_solucion
+
+
 def obtener_vecindad(solucion, grid, suavizado_factor=0.5):
-    """
-    Genera vecinos basados en la similitud de los valores de las celdas, considerando vecinos ortogonales.
-    """
     vecinos = []
     filas, columnas = solucion.shape
     direcciones = [(-1, 0), (1, 0), (0, -1), (0, 1)]
@@ -97,15 +102,13 @@ def obtener_vecindad(solucion, grid, suavizado_factor=0.5):
             if vecinos_regiones:
                 vecino[f, c] = random.choice(list(vecinos_regiones))
 
-        vecinos.append(vecino)
+        vecinos.append(ajustar_casillas_aisladas(vecino))
     return vecinos
 
-def busqueda_tabu(grid, alpha, max_iter=10000, tabu_size=60, n_clusters=4):
-    """
-    Implementa la búsqueda tabú para encontrar una zonificación agrícola óptima.
-    """
+
+def busqueda_tabu(grid, alpha, max_iter, tabu_size, n_clusters):
     solucion_actual = inicializar_solucion_espectral(grid, n_clusters)
-    mejor_solucion = solucion_actual.copy()
+    mejor_solucion = ajustar_casillas_aisladas(solucion_actual.copy())
     mejor_costo = calcular_costo(mejor_solucion, grid, alpha)
     tabu_list = deque(maxlen=tabu_size)
 
@@ -130,6 +133,7 @@ def busqueda_tabu(grid, alpha, max_iter=10000, tabu_size=60, n_clusters=4):
 
     return mejor_solucion, mejor_costo
 
+
 def plot_solution(grid, solution, filename, alpha):
     """
     Genera dos gráficos de las subdivisiones en la matriz: uno con colores difuminados y otro sin difuminado,
@@ -141,7 +145,7 @@ def plot_solution(grid, solution, filename, alpha):
     norm = Normalize(vmin=vmin, vmax=vmax)
 
     # Crear directorio para guardar imágenes por alpha
-    alpha_dir = f"imagenes_sinteticas_alpha{alpha}"
+    alpha_dir = f"imagenes_reales_alpha{alpha}"
     if not os.path.exists(alpha_dir):
         os.makedirs(alpha_dir)
 
@@ -165,7 +169,7 @@ def plot_solution(grid, solution, filename, alpha):
     cbar.ax.set_ylabel('Valor')
 
     # Guardar imagen con difuminado
-    image_filename_diffuse = os.path.join(alpha_dir, f"sintetica_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
+    image_filename_diffuse = os.path.join(alpha_dir, f"reales_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
     plt.savefig(image_filename_diffuse)
     plt.close()
 
@@ -188,73 +192,77 @@ def plot_solution(grid, solution, filename, alpha):
     cbar_no_diffuse.ax.set_ylabel('Valor')
 
     # Guardar imagen sin difuminado
-    image_filename_no_diffuse = os.path.join(alpha_dir, f"sintetica_no_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
+    image_filename_no_diffuse = os.path.join(alpha_dir, f"reales_no_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
     plt.savefig(image_filename_no_diffuse)
     plt.close()
 
     return image_filename_diffuse, image_filename_no_diffuse
 
-def guardar_resultados_en_excel(results, best_results, alpha):
-    with pd.ExcelWriter(f"resultados_sinteticos_alpha{alpha}.xlsx") as writer:
-        # Guardar las 30 iteraciones por cada archivo
-        for filename, data in results.items():
-            df_results = pd.DataFrame(data['results'])
-            df_results.to_excel(writer, sheet_name=filename, index=False)
+def guardar_resultados_en_excel(best_results, alpha, iteration_results):
+    """
+    Guarda los resultados en un archivo Excel. 
+    Crea una hoja para los resultados globales por cada valor de alpha y una hoja adicional por cada archivo txt
+    para registrar todas las iteraciones.
+    """
+    filename = f"resultados_reales_alpha_{alpha}.xlsx"
+    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+        # Hoja de resultados globales
+        df_global = pd.DataFrame(best_results)
+        df_global.to_excel(writer, sheet_name='Global', index=False)
 
-        # Guardar los mejores resultados en una hoja separada
-        df_best = pd.DataFrame(best_results)
-        df_best.to_excel(writer, sheet_name='Mejores_Resultados', index=False)
+        # Hojas para cada archivo con resultados de iteraciones
+        for file_name, results in iteration_results.items():
+            df_iter = pd.DataFrame(results)
+            sheet_name = file_name.replace('.txt', '')[:31]  # Limitar a 31 caracteres (límite de Excel)
+            df_iter.to_excel(writer, sheet_name=sheet_name, index=False)
+
+    print(f"Resultados guardados en {filename}")
 
 
 if __name__ == "__main__":
+    os.system('cls')
     warnings.filterwarnings("ignore", message="Graph is not fully connected")
 
-    folder_path = r'C:\Users\geome\OneDrive\Documentos\SEMESTRE 5\OPTIMIZACION Y META 1\PROYECTO FINAL\zonificacion_agricola\sinteticas'
+    folder_path = r'C:\Users\geome\OneDrive\Documentos\SEMESTRE 5\OPTIMIZACION Y META 1\PROYECTO FINAL\zonificacion_agricola\Reales'
     matrices, filenames = read_txt_files(folder_path)
-    
-    alpha_values = [0.5, 0.7, 0.9]
-    all_results = {}
-    best_results = []
 
-    # Ejecutar el proceso 30 veces por cada alpha
+    alpha_values = [0.5, 0.7, 0.9]
+
     for alpha in alpha_values:
-        # Limpiar best_results al inicio de cada alpha
         best_results = []
-        
-        for i in range(50):  # Ejecutar 30 veces para cada alpha
-            for j, (grid, filename) in enumerate(zip(matrices, filenames)):
+        iteration_results = {}
+
+        for j, (grid, filename) in enumerate(zip(matrices, filenames)):
+            mejor_costo_global = float('inf')
+            mejor_solucion_global = None
+            archivo_iteraciones = []
+
+            for i in range(5):  # Ejecutar 30 iteraciones para cada archivo
                 print(f"Procesando archivo: {filename} | Iteración: {i+1} | alpha: {alpha}")
                 mejor_solucion, mejor_costo = busqueda_tabu(grid, alpha, max_iter=10000, tabu_size=60, n_clusters=4)
                 subdivisiones = contar_subdivisiones(mejor_solucion)
-
-                # Guardar imagen de la mejor solución
-                image_filename_diffuse, image_filename_no_diffuse = plot_solution(grid, mejor_solucion, filename, alpha)
-
-                # Guardar los resultados
-                if filename not in all_results:
-                    all_results[filename] = {'results': []}
-
-                all_results[filename]['results'].append({
+                archivo_iteraciones.append({
                     'Iteración': i + 1,
                     'Costo': mejor_costo,
-                    'Subdivisiones': subdivisiones,
+                    'Subdivisiones': contar_subdivisiones(mejor_solucion)
                 })
 
-                # Almacenar el mejor resultado de cada archivo
-                if i == 0 or mejor_costo < all_results[filename]['best_result']['Mejor Costo']:
-                    all_results[filename]['best_result'] = {
-                        'Mejor Costo': mejor_costo,
-                        'Mejor Subdivisiones': subdivisiones,
-                    }
+                if mejor_costo < mejor_costo_global:
+                    mejor_costo_global = mejor_costo
+                    mejor_solucion_global = mejor_solucion
 
-        # Añadir los mejores resultados de todos los archivos al resumen
-        for filename, data in all_results.items():
+            # Generar imágenes de la mejor solución
+            plot_solution(grid, mejor_solucion_global, filename, alpha)
+
+            # Guardar el mejor resultado global para este archivo
             best_results.append({
                 'Archivo': filename,
-                'Mejor Costo': data['best_result']['Mejor Costo'],
-                'Mejor Subdivisiones': data['best_result']['Mejor Subdivisiones'],
+                'Mejor Costo': mejor_costo_global,
+                'Mejor Subdivisiones': contar_subdivisiones(mejor_solucion_global),
             })
 
-        # Guardar los resultados en un Excel
-        guardar_resultados_en_excel(all_results, best_results, alpha)
-        
+            # Guardar resultados de iteraciones para este archivo
+            iteration_results[filename] = archivo_iteraciones
+
+        # Guardar todos los resultados en Excel
+        guardar_resultados_en_excel(best_results, alpha, iteration_results)
