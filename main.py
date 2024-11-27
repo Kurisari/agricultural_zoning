@@ -220,7 +220,7 @@ def guardar_resultados_en_excel(best_results, alpha, iteration_results):
             sheet_name = file_name.replace('.txt', '')[:31]  # Limitar a 31 caracteres (límite de Excel)
             df_iter.to_excel(writer, sheet_name=sheet_name, index=False)
 
-    print(f"Resultados guardados en {filename}")
+    print(f"Resultados guardados en {filename}\n")
 
 
 if __name__ == "__main__":
