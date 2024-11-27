@@ -207,7 +207,6 @@ def guardar_resultados_en_excel(results, best_results, alpha):
 
 
 if __name__ == "__main__":
-    os.system('cls')
     warnings.filterwarnings("ignore", message="Graph is not fully connected")
 
     folder_path = r'C:\Users\geome\OneDrive\Documentos\SEMESTRE 5\OPTIMIZACION Y META 1\PROYECTO FINAL\zonificacion_agricola\sinteticas'
