@@ -1,6 +1,28 @@
 import numpy as np
 import random
 from collections import deque
+import os
+
+def read_txt_files(folder_path):
+    """
+    Lee todos los archivos .txt de una carpeta y devuelve una lista de matrices con sus nombres de archivo.
+    """
+    matrices = []
+    filenames = []
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.txt'):
+            file_path = os.path.join(folder_path, filename)
+            with open(file_path, 'r') as file:
+                lines = file.readlines()
+                # Leer las dimensiones de la matriz
+                rows, cols = map(int, lines[0].split())
+                # Leer los valores numéricos
+                data = [float(value) for line in lines[1:] for value in line.split()]
+                # Convertir a numpy array con la forma especificada
+                grid = np.array(data).reshape(rows, cols)
+                matrices.append(grid)
+                filenames.append(filename)
+    return matrices, filenames
 
 def calculate_homogeneity(region_values, total_variance, total_size, alpha):
     region_size = len(region_values)
@@ -52,7 +74,7 @@ def calcular_costo(solucion, grid, alpha):
         costo += 1
     return costo
 
-def busqueda_tabu(grid, alpha, max_iter=100, tabu_size=10):
+def busqueda_tabu(grid, alpha, max_iter=1000, tabu_size=15):
     """
     Implementa la búsqueda tabú para encontrar una zonificación agrícola óptima.
     """
@@ -93,17 +115,45 @@ def busqueda_tabu(grid, alpha, max_iter=100, tabu_size=10):
 
     return mejor_solucion, mejor_costo
 
-# Ejemplo de uso
-grid = np.array([[10.7, 15.4, 13.9, 16.1, 15.6, 16.6, 16.6], 
-                 [11.7, 16.0, 13.8, 12.6, 14.4, 15.4, 11.2], 
-                 [15.1, 12.6, 14.8, 16.8, 10.5, 18.7, 10.4], 
-                 [16.3, 12.7, 14.2, 11.4, 11.5, 16.7, 13.5], 
-                 [14.1, 11.1, 14.5, 15.0, 14.13, 9.6, 12.5], 
-                 [11.8, 12.8, 14.9, 14.0, 11.2, 14.7, 14.7]])
-alpha = 0.7  # Umbral de homogeneidad
+os.system('cls')
 
-mejor_solucion, mejor_costo = busqueda_tabu(grid, alpha, max_iter=100, tabu_size=10)
+# Ruta de la carpeta con los archivos .txt
+folder_path = r'C:\Users\geome\OneDrive\Documentos\SEMESTRE 5\OPTIMIZACION Y META 1\PROYECTO FINAL\zonificacion_agricola\Reales'
 
-print("Mejor solución encontrada:")
-print(mejor_solucion)
-print("Costo de la solución:", mejor_costo)
+# Leer matrices y sus nombres desde los archivos .txt
+matrices, filenames = read_txt_files(folder_path)
+
+alpha1 = 0.5  # Umbral de homogeneidad
+alpha2 = 0.7  # Umbral de homogeneidad
+alpha3 = 0.9  # Umbral de homogeneidad
+
+print(f"\nUmbral de homogeneidad: {alpha1}\n")
+# Ejecutar búsqueda tabú para cada matriz
+for i, (grid, filename) in enumerate(zip(matrices, filenames)):
+    print(f"Procesando archivo: {filename}")
+    mejor_solucion, mejor_costo = busqueda_tabu(grid, alpha1, max_iter=1000, tabu_size=15)
+    print("Mejor solución encontrada:")
+    print(mejor_solucion)
+    print("\nCosto de la solución:", mejor_costo)
+    print("-" * 50)
+
+print(f"\nUmbral de homogeneidad: {alpha2}\n")
+# Ejecutar búsqueda tabú para cada matriz
+for i, (grid, filename) in enumerate(zip(matrices, filenames)):
+
+    print(f"Procesando archivo: {filename}")
+    mejor_solucion, mejor_costo = busqueda_tabu(grid, alpha2, max_iter=1000, tabu_size=15)
+    print("Mejor solución encontrada:")
+    print(mejor_solucion)
+    print("\nCosto de la solución:", mejor_costo)
+    print("-" * 50)
+    
+print(f"\nUmbral de homogeneidad: {alpha3}\n")
+# Ejecutar búsqueda tabú para cada matriz
+for i, (grid, filename) in enumerate(zip(matrices, filenames)):
+    print(f"Procesando archivo: {filename}")
+    mejor_solucion, mejor_costo = busqueda_tabu(grid, alpha3, max_iter=1000, tabu_size=15)
+    print("Mejor solución encontrada:")
+    print(mejor_solucion)
+    print("\nCosto de la solución:", mejor_costo)
+    print("-" * 50)
