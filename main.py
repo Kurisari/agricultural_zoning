@@ -71,30 +71,16 @@ def calcular_costo(solucion, grid, alpha, penalizacion_subdivisiones=0.1):
 def obtener_vecindad(solucion, grid, suavizado_factor=0.5):
     """
     Genera vecinos basados en la similitud de los valores de las celdas, considerando vecinos ortogonales.
-    Además, cambia el color de una casilla si está rodeada por 4 casillas del mismo color.
     """
     vecinos = []
     filas, columnas = solucion.shape
-    direcciones = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # direcciones ortogonales: arriba, abajo, izquierda, derecha
+    direcciones = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
     for _ in range(10):  # Generar 10 vecinos aleatorios
         vecino = solucion.copy()
         f, c = random.randint(0, filas - 1), random.randint(0, columnas - 1)
         vecinos_cercanos = []
 
-        # Verificar si la casilla está rodeada de casillas del mismo color en las 4 direcciones
-        colores_vecinos = []
-        for df, dc in direcciones:
-            nf, nc = f + df, c + dc
-            if 0 <= nf < filas and 0 <= nc < columnas:
-                colores_vecinos.append(vecino[nf, nc])
-
-        # Si todos los vecinos ortogonales tienen el mismo color, cambiar el color de la casilla
-        if len(set(colores_vecinos)) == 1:  # Todos los vecinos tienen el mismo color
-            vecino[f, c] = colores_vecinos[0]  # Cambiar a ese color
-
-        # Resto de la lógica para la vecindad, basada en la similitud de los valores de las celdas
-        vecinos_cercanos = []
         for df, dc in direcciones:
             nf, nc = f + df, c + dc
             if 0 <= nf < filas and 0 <= nc < columnas:
@@ -113,7 +99,6 @@ def obtener_vecindad(solucion, grid, suavizado_factor=0.5):
 
         vecinos.append(vecino)
     return vecinos
-
 
 def busqueda_tabu(grid, alpha, max_iter=10000, tabu_size=60, n_clusters=4):
     """
@@ -145,11 +130,12 @@ def busqueda_tabu(grid, alpha, max_iter=10000, tabu_size=60, n_clusters=4):
 
     return mejor_solucion, mejor_costo
 
-def plot_best_solution(grid, best_solution, filename, alpha):
+def plot_solution(grid, solution, filename, alpha):
     """
-    Genera las imágenes de la mejor solución global.
+    Genera dos gráficos de las subdivisiones en la matriz: uno con colores difuminados y otro sin difuminado,
+    pero con el mismo esquema de colores.
     """
-    vmin, vmax = np.min(best_solution), np.max(best_solution)
+    vmin, vmax = np.min(solution), np.max(solution)
     # Definimos un mapa de colores personalizado
     cmap_diffuse = LinearSegmentedColormap.from_list("custom", ["blue", "cyan", "lime", "yellow", "orange", "red"])
     norm = Normalize(vmin=vmin, vmax=vmax)
@@ -161,48 +147,48 @@ def plot_best_solution(grid, best_solution, filename, alpha):
 
     # Imagen con difuminado (bilinear)
     plt.figure(figsize=(8, 6))
-    img = plt.imshow(best_solution, cmap=cmap_diffuse, interpolation='bilinear', norm=norm)
-    contours = measure.find_contours(best_solution, level=vmin - 0.5)
+    img = plt.imshow(solution, cmap=cmap_diffuse, interpolation='bilinear', norm=norm)
+    contours = measure.find_contours(solution, level=vmin - 0.5)
 
     for contour in contours:
         plt.plot(contour[:, 1], contour[:, 0], color='black', linewidth=2)
 
-    filas, columnas = best_solution.shape
+    filas, columnas = solution.shape
     for f in range(filas):
         for c in range(columnas):
-            plt.text(c, f, f"{best_solution[f, c]:.2f}", color="black", ha="center", va="center", fontsize=8)
+            plt.text(c, f, f"{solution[f, c]:.2f}", color="black", ha="center", va="center", fontsize=8)
 
-    plt.title(f"Mejor Solución Global: {filename} | alpha: {alpha}")
+    plt.title(f"Mapa de la Parcela: {filename} | alpha: {alpha}")
     plt.xlabel("Columnas")
     plt.ylabel("Filas")
     cbar = plt.colorbar(img, label="Valor")
     cbar.ax.set_ylabel('Valor')
 
     # Guardar imagen con difuminado
-    image_filename_diffuse = os.path.join(alpha_dir, f"mejor_solucion_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
+    image_filename_diffuse = os.path.join(alpha_dir, f"reales_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
     plt.savefig(image_filename_diffuse)
     plt.close()
 
     # Imagen sin difuminado (nearest)
     plt.figure(figsize=(8, 6))
-    img_no_diffuse = plt.imshow(best_solution, cmap=cmap_diffuse, interpolation='nearest', norm=norm)
-    contours_no_diffuse = measure.find_contours(best_solution, level=vmin - 0.5)
+    img_no_diffuse = plt.imshow(solution, cmap=cmap_diffuse, interpolation='nearest', norm=norm)
+    contours_no_diffuse = measure.find_contours(solution, level=vmin - 0.5)
 
     for contour in contours_no_diffuse:
         plt.plot(contour[:, 1], contour[:, 0], color='black', linewidth=2)
 
     for f in range(filas):
         for c in range(columnas):
-            plt.text(c, f, f"{best_solution[f, c]:.2f}", color="black", ha="center", va="center", fontsize=8)
+            plt.text(c, f, f"{solution[f, c]:.2f}", color="black", ha="center", va="center", fontsize=8)
 
-    plt.title(f"Mejor Solución Global: {filename} | alpha: {alpha}")
+    plt.title(f"Mapa de la Parcela: {filename} | alpha: {alpha}")
     plt.xlabel("Columnas")
     plt.ylabel("Filas")
     cbar_no_diffuse = plt.colorbar(img_no_diffuse, label="Valor")
     cbar_no_diffuse.ax.set_ylabel('Valor')
 
     # Guardar imagen sin difuminado
-    image_filename_no_diffuse = os.path.join(alpha_dir, f"mejor_solucion_no_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
+    image_filename_no_diffuse = os.path.join(alpha_dir, f"reales_no_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
     plt.savefig(image_filename_no_diffuse)
     plt.close()
 
@@ -210,9 +196,15 @@ def plot_best_solution(grid, best_solution, filename, alpha):
 
 def guardar_resultados_en_excel(results, best_results, alpha):
     with pd.ExcelWriter(f"resultados_reales_alpha{alpha}.xlsx") as writer:
+        # Guardar las 30 iteraciones por cada archivo
+        for filename, data in results.items():
+            df_results = pd.DataFrame(data['results'])
+            df_results.to_excel(writer, sheet_name=filename, index=False)
+
         # Guardar los mejores resultados en una hoja separada
         df_best = pd.DataFrame(best_results)
         df_best.to_excel(writer, sheet_name='Mejores_Resultados', index=False)
+
 
 if __name__ == "__main__":
     os.system('cls')
@@ -230,29 +222,39 @@ if __name__ == "__main__":
         # Limpiar best_results al inicio de cada alpha
         best_results = []
         
-        # Variables para almacenar la mejor solución global
-        mejor_solucion_global = None
-        mejor_costo_global = float('inf')
-
         for i in range(5):  # Ejecutar 30 veces para cada alpha
             for j, (grid, filename) in enumerate(zip(matrices, filenames)):
                 print(f"Procesando archivo: {filename} | Iteración: {i+1} | alpha: {alpha}")
                 mejor_solucion, mejor_costo = busqueda_tabu(grid, alpha, max_iter=10000, tabu_size=60, n_clusters=4)
+                subdivisiones = contar_subdivisiones(mejor_solucion)
 
-                # Almacenar la mejor solución global
-                if mejor_costo < mejor_costo_global:
-                    mejor_solucion_global = mejor_solucion
-                    mejor_costo_global = mejor_costo
+                # Guardar imagen de la mejor solución
+                image_filename_diffuse, image_filename_no_diffuse = plot_solution(grid, mejor_solucion, filename, alpha)
 
-        # Generar las imágenes de la mejor solución global
-        if mejor_solucion_global is not None:
-            for filename in filenames:
-                plot_best_solution(grid, mejor_solucion_global, filename, alpha)
+                # Guardar los resultados
+                if filename not in all_results:
+                    all_results[filename] = {'results': []}
+
+                all_results[filename]['results'].append({
+                    'Iteración': i + 1,
+                    'Costo': mejor_costo,
+                    'Subdivisiones': subdivisiones,
+                })
+
+                # Almacenar el mejor resultado de cada archivo
+                if i == 0 or mejor_costo < all_results[filename]['best_result']['Mejor Costo']:
+                    all_results[filename]['best_result'] = {
+                        'Mejor Costo': mejor_costo,
+                        'Mejor Subdivisiones': subdivisiones,
+                    }
 
         # Añadir los mejores resultados de todos los archivos al resumen
-        best_results.append({
-            'Mejor Costo Global': mejor_costo_global,
-        })
+        for filename, data in all_results.items():
+            best_results.append({
+                'Archivo': filename,
+                'Mejor Costo': data['best_result']['Mejor Costo'],
+                'Mejor Subdivisiones': data['best_result']['Mejor Subdivisiones'],
+            })
 
         # Guardar los resultados en un Excel
         guardar_resultados_en_excel(all_results, best_results, alpha)
