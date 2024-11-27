@@ -133,19 +133,23 @@ def busqueda_tabu(grid, alpha, max_iter, tabu_size, n_clusters):
 
     return mejor_solucion, mejor_costo
 
+import numpy as np
 
 def plot_solution(grid, solution, filename, alpha):
     """
     Genera dos gráficos de las subdivisiones en la matriz: uno con colores difuminados y otro sin difuminado,
     pero con el mismo esquema de colores.
     """
+    # Asegurarse de que 'solution' es un numpy array
+    solution = np.array(solution, dtype=float)
+
     vmin, vmax = np.min(solution), np.max(solution)
     # Definimos un mapa de colores personalizado
     cmap_diffuse = LinearSegmentedColormap.from_list("custom", ["blue", "cyan", "lime", "yellow", "orange", "red"])
     norm = Normalize(vmin=vmin, vmax=vmax)
 
     # Crear directorio para guardar imágenes por alpha
-    alpha_dir = f"imagenes_reales_alpha{alpha}"
+    alpha_dir = f"imagenes_sinteticas_alpha{alpha}"
     if not os.path.exists(alpha_dir):
         os.makedirs(alpha_dir)
 
@@ -169,7 +173,7 @@ def plot_solution(grid, solution, filename, alpha):
     cbar.ax.set_ylabel('Valor')
 
     # Guardar imagen con difuminado
-    image_filename_diffuse = os.path.join(alpha_dir, f"reales_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
+    image_filename_diffuse = os.path.join(alpha_dir, f"sintetica_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
     plt.savefig(image_filename_diffuse)
     plt.close()
 
@@ -192,7 +196,7 @@ def plot_solution(grid, solution, filename, alpha):
     cbar_no_diffuse.ax.set_ylabel('Valor')
 
     # Guardar imagen sin difuminado
-    image_filename_no_diffuse = os.path.join(alpha_dir, f"reales_no_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
+    image_filename_no_diffuse = os.path.join(alpha_dir, f"sintetica_no_diffuse_{filename.replace('.txt', f'_alpha{alpha}.png')}")
     plt.savefig(image_filename_no_diffuse)
     plt.close()
 
@@ -237,7 +241,7 @@ if __name__ == "__main__":
             mejor_solucion_global = None
             archivo_iteraciones = []
 
-            for i in range(5):  # Ejecutar 30 iteraciones para cada archivo
+            for i in range(3):  # Ejecutar 30 iteraciones para cada archivo
                 print(f"Procesando archivo: {filename} | Iteración: {i+1} | alpha: {alpha}")
                 mejor_solucion, mejor_costo = busqueda_tabu(grid, alpha, max_iter=10000, tabu_size=60, n_clusters=4)
                 subdivisiones = contar_subdivisiones(mejor_solucion)
