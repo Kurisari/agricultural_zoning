@@ -1,99 +1,115 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import random
-import os
+from scipy.ndimage import label
 
-# Cargar la matriz desde el archivo de texto
-def cargar_matriz_desde_txt(ruta_archivo):
-    with open(ruta_archivo, 'r') as archivo:
-        lines = archivo.readlines()
-        filas, columnas = map(int, lines[0].split())  # Leer las dimensiones de la matriz
-        matriz = np.array([list(map(float, linea.split())) for linea in lines[1:]])
-        print(matriz)   
-    return matriz
+# Leer archivo y cargar la matriz
+def cargar_datos(archivo):
+    with open(archivo, 'r') as file:
+        lines = file.readlines()
+        dimensiones = tuple(map(int, lines[0].split()))
+        matriz = np.array([list(map(float, line.split())) for line in lines[1:]])
+    return dimensiones, matriz
 
+# Función para etiquetar regiones conexas
+def etiquetar_regiones(asignaciones):
+    estructura = np.array([[0, 1, 0],
+                           [1, 1, 1],
+                           [0, 1, 0]])  # Adyacencia solo ortogonal (no diagonal)
+    etiquetas, _ = label(asignaciones, structure=estructura)
+    return etiquetas
 
-# Calcular homogeneidad de las zonas
-def calcular_homogeneidad(matriz, zonas, sigma_T):
-    homogeneidad = 0
-    for zona in zonas:
-        valores = [matriz[x, y] for x, y in zona]  # Acceder a los valores de la matriz usando las coordenadas de las zonas
-        media = np.mean(valores)
-        varianza = np.var(valores)
-        homogeneidad += (1 - (varianza / sigma_T)) * len(zona)
-    return homogeneidad / len(matriz)
+# Verificar homogeneidad dentro de cada sub-región
+def verificar_homogeneidad(matriz, etiquetas, umbral):
+    regiones = np.unique(etiquetas)
+    for region in regiones:
+        if region == 0:  # Ignorar fondo
+            continue
+        valores = matriz[etiquetas == region]
+        if max(valores) - min(valores) > umbral:
+            return False
+    return True
 
+# Función de costo: número de sub-regiones válidas
+def calcular_costo(matriz, etiquetas, umbral):
+    if not verificar_homogeneidad(matriz, etiquetas, umbral):
+        return float('inf')  # Penalizar soluciones no homogéneas
+    return len(np.unique(etiquetas)) - 1  # Número de regiones (ignorar fondo)
 
-# Función objetivo para evaluar la solución
-def funcion_objetivo(matriz, zonas, sigma_T, alpha):
-    h = calcular_homogeneidad(matriz, zonas, sigma_T)
-    if h >= alpha:
-        return 0  # Si cumple el umbral de homogeneidad
-    return 1 - h  # Penalizar la falta de homogeneidad
+# Generar una solución inicial conectada
+def generar_solucion_inicial(matriz, umbral):
+    filas, columnas = matriz.shape
+    asignaciones = np.zeros_like(matriz, dtype=int)
+    region_id = 1
+    for i in range(filas):
+        for j in range(columnas):
+            if asignaciones[i, j] == 0:  # Si no está asignado
+                # Expandir región usando una cola (BFS)
+                cola = [(i, j)]
+                while cola:
+                    x, y = cola.pop(0)
+                    if asignaciones[x, y] == 0:
+                        asignaciones[x, y] = region_id
+                        # Verificar vecinos adyacentes
+                        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                            nx, ny = x + dx, y + dy
+                            if 0 <= nx < filas and 0 <= ny < columnas:
+                                if asignaciones[nx, ny] == 0 and abs(matriz[x, y] - matriz[nx, ny]) <= umbral:
+                                    cola.append((nx, ny))
+                region_id += 1
+    return asignaciones
 
-# Generar vecindad asegurando el formato correcto
-def generar_vecindad(zonas, matriz_shape):
-    nuevas_zonas = []
-    for zona in zonas:
-        nueva_zona = zona.copy()
-        if random.random() > 0.5:  # Aleatoriamente añadir o quitar celdas
-            x, y = random.randint(0, matriz_shape[0] - 1), random.randint(0, matriz_shape[1] - 1)
-            if (x, y) not in nueva_zona:
-                nueva_zona.append((x, y))
-        elif len(nueva_zona) > 1:
-            nueva_zona.pop(random.randint(0, len(nueva_zona) - 1))  # Quitar una celda aleatoria
-        nuevas_zonas.append(nueva_zona)
-    return nuevas_zonas
+# Movimiento: intenta cambiar la región de una celda
+def generar_vecino(matriz, etiquetas, umbral):
+    vecino = etiquetas.copy()
+    i, j = random.choice(list(np.ndindex(etiquetas.shape)))
+    region_actual = etiquetas[i, j]
+    
+    # Cambiar a una región adyacente
+    posibles_regiones = set()
+    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        ni, nj = i + dx, j + dy
+        if 0 <= ni < matriz.shape[0] and 0 <= nj < matriz.shape[1]:
+            posibles_regiones.add(etiquetas[ni, nj])
+    
+    posibles_regiones.discard(region_actual)
+    if posibles_regiones:
+        vecino[i, j] = random.choice(list(posibles_regiones))
+    
+    # Reetiquetar regiones después de modificar
+    return etiquetar_regiones(vecino)
 
-# Búsqueda Tabú
-def busqueda_tabu(matriz, num_iteraciones, lista_tabu_max, sigma_T, alpha):
-    # Inicializar solución inicial
-    zonas = [[(i, j)] for i in range(matriz.shape[0]) for j in range(matriz.shape[1])]  # Cada celda es su propia zona
-    mejor_solucion = zonas
-    mejor_valor = funcion_objetivo(matriz, mejor_solucion, sigma_T, alpha)
+# Búsqueda tabú
+def busqueda_tabu(matriz, umbral, iteraciones=1000, tamaño_lista_tabu=50):
+    solucion_actual = generar_solucion_inicial(matriz, umbral)
+    mejor_solucion = solucion_actual
+    mejor_costo = calcular_costo(matriz, mejor_solucion, umbral)
+    
     lista_tabu = []
+    for _ in range(iteraciones):
+        vecinos = [generar_vecino(matriz, solucion_actual, umbral) for _ in range(10)]
+        vecino_costos = [(vecino, calcular_costo(matriz, vecino, umbral)) for vecino in vecinos]
+        vecino_costos = sorted(vecino_costos, key=lambda x: x[1])  # Ordenar por costo
+        
+        for vecino, costo in vecino_costos:
+            if vecino.tolist() not in lista_tabu:
+                solucion_actual = vecino
+                if costo < mejor_costo:
+                    mejor_solucion = vecino
+                    mejor_costo = costo
+                lista_tabu.append(vecino.tolist())
+                if len(lista_tabu) > tamaño_lista_tabu:
+                    lista_tabu.pop(0)
+                break
 
-    for _ in range(num_iteraciones):
-        vecindad = generar_vecindad(zonas, matriz.shape)
-        mejor_vecino = min(vecindad, key=lambda z: funcion_objetivo(matriz, z, sigma_T, alpha))
+    return mejor_solucion, mejor_costo
 
-        # Evaluar la mejor solución de la vecindad
-        if mejor_vecino not in lista_tabu:
-            zonas = mejor_vecino
-            valor = funcion_objetivo(matriz, zonas, sigma_T, alpha)
+# Parámetros
+archivo = "MO.txt"
+umbral = 3.0  # Diferencia máxima permitida dentro de una sub-región
+dimensiones, matriz = cargar_datos(archivo)
 
-            if valor < mejor_valor:
-                mejor_solucion = zonas
-                mejor_valor = valor
-
-            lista_tabu.append(mejor_vecino)
-            if len(lista_tabu) > lista_tabu_max:
-                lista_tabu.pop(0)
-
-    return mejor_solucion, mejor_valor
-
-# Visualización de la matriz y las zonas
-def plot_zonas(matriz, zonas):
-    plt.imshow(matriz, cmap='viridis', interpolation='nearest')
-    for zona in zonas:
-        for (x, y) in zona:
-            plt.text(y, x, f'X', ha='center', va='center', color='red', fontsize=8)
-    plt.colorbar(label='Valores de MO')
-    plt.title("Zonificación agrícola")
-    plt.show()
-
-# Parámetros y ejecución
-ruta_archivo = r"./zonificacion_agricola/Reales/MO.txt" # Ruta al archivo con los datos
-matriz = cargar_matriz_desde_txt(ruta_archivo)
-
-
-num_iteraciones = 100
-lista_tabu_max = 10
-sigma_T = 5  # Ajustar según los datos
-alpha = 0.7  # Umbral de homogeneidad
-
-mejor_solucion, mejor_valor = busqueda_tabu(matriz, num_iteraciones, lista_tabu_max, sigma_T, alpha)
-
-# Visualizar resultado
-print("Mejor valor de la función objetivo:", mejor_valor)
-plot_zonas(matriz, mejor_solucion)
+# Ejecutar búsqueda tabú
+mejor_solucion, mejor_costo = busqueda_tabu(matriz, umbral)
+print("Mejor solución encontrada:")
+print(mejor_solucion)
+print("Costo de la mejor solución:", mejor_costo)
