@@ -56,6 +56,7 @@ def calcular_homogeneidad(grid, region, total_variance, total_size):
 
     if region_size > 1:  # Evitar divisiones por 0
         h_q_s = (1 - ((region_size - 1) * region_variance) / (total_variance * (total_size - region_size)))
+        print(h_q_s)
     else:
         h_q_s = 0  # Homogeneidad máxima si solo hay un elemento
 
