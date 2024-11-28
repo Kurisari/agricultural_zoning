@@ -10,6 +10,8 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize
 from collections import deque
 import pandas as pd
 
+
+print("HI")
 def read_txt_files(folder_path):
     """
     Lee todos los archivos .txt de una carpeta y devuelve una lista de matrices con sus nombres de archivo.
