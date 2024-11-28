@@ -47,9 +47,23 @@ def inicializar_solucion_espectral(grid, n_clusters):
     labels = spectral.fit_predict(reshaped_grid)
     return labels.reshape(grid.shape)
 
+def calcular_homogeneidad(grid, region, total_variance, total_size):
+    """
+    Calcula la homogeneidad de una región utilizando la fórmula de la imagen.
+    """
+    region_size = len(region)
+    region_variance = np.var(region)
+
+    if region_size > 1:  # Evitar divisiones por 0
+        h_q_s = (1 - ((region_size - 1) * region_variance) / (total_variance * (total_size - region_size)))
+    else:
+        h_q_s = 0  # Homogeneidad máxima si solo hay un elemento
+
+    return h_q_s
+
 def calcular_costo(solucion, grid, alpha, penalizacion_subdivisiones=0.1):
     """
-    Calcula el costo de una solución basado en el número de subregiones y su homogeneidad.
+    Calcula el costo de una solución basado en la fórmula actualizada de homogeneidad.
     """
     regiones = np.unique(solucion)
     total_variance = np.var(grid)
@@ -58,11 +72,11 @@ def calcular_costo(solucion, grid, alpha, penalizacion_subdivisiones=0.1):
 
     for region in regiones:
         valores_region = grid[solucion == region]
-        region_variance = np.var(valores_region)
-        H = 1 - (len(valores_region) * region_variance) / (total_variance * total_size)
-        if H < alpha:
+        h_q_s = calcular_homogeneidad(grid, valores_region, total_variance, total_size)
+
+        if h_q_s < alpha:
             return float('inf')  # Penalización para soluciones no válidas
-        costo += region_variance
+        costo += (1 - h_q_s)  # Coste proporcional a la falta de homogeneidad
 
     subdivisiones = contar_subdivisiones(solucion)
     costo += penalizacion_subdivisiones * subdivisiones
